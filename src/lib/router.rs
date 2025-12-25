@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::{MaelstromError, Message, MessageBody};
+use crate::{MaelstromError, Message, MessageBody, node::MaelstromNode};
 
 type HandlerFun = fn(r: &Message) -> Result<Message, MaelstromError>;
 
