@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt::Display};
+use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -11,44 +11,51 @@ use tower::Service;
 use crate::Router;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[serde(default)]
 pub struct MessageBody {
-    msg_type: String,
-    msg_id: u64,
-    in_reply_to: u64,
+    #[serde(rename = "type")]
+    pub msg_type: String,
+
+    pub msg_id: u64,
+
+    pub in_reply_to: u64,
+
+    // Initializations
+    pub node_id: String,
+    pub node_ids: Vec<String>,
 }
 
 impl MessageBody {
-    pub fn msg_type(&self) -> String {
-        self.msg_type.clone()
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
-pub struct Request {
-    src: String,
-    dest: String,
-    body: MessageBody,
-}
-
-impl Request {
-    pub fn body(&self) -> MessageBody {
-        MessageBody {
-            msg_type: self.body.msg_type.clone(),
-            msg_id: self.body.msg_id,
-            in_reply_to: self.body.in_reply_to,
+    pub fn new(msg_type: String, msg_id: u64, in_reply_to: u64) -> Self {
+        Self {
+            msg_type,
+            msg_id,
+            in_reply_to,
+            node_id: String::new(),
+            node_ids: vec![],
         }
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Response {}
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[serde(default)]
+pub struct Message {
+    pub src: String,
+    pub dest: String,
+    pub body: MessageBody,
+}
 
-#[derive(Debug, Error, Serialize, Deserialize)]
+impl Message {
+    pub fn new(src: String, dest: String, body: MessageBody) -> Self {
+        Self { src, dest, body }
+    }
+}
 
 /*
 Error enums based on the Maelstrom protocol
 Reference: https://github.com/jepsen-io/maelstrom/blob/main/doc/protocol.md
 */
+#[derive(Debug, Error, Serialize, Deserialize)]
 pub enum MaelstromError {
     Timeout,
 
@@ -90,18 +97,18 @@ impl MaelstromService {
     }
 }
 
-impl Service<Request> for MaelstromService {
-    type Response = Response;
+impl Service<Message> for MaelstromService {
+    type Response = Message;
 
     type Error = MaelstromError;
 
-    type Future = BoxFuture<'static, Result<Response, MaelstromError>>;
+    type Future = BoxFuture<'static, Result<Message, MaelstromError>>;
 
     fn poll_ready(&mut self, _: &mut std::task::Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: Request) -> Self::Future {
+    fn call(&mut self, req: Message) -> Self::Future {
         let res = self.router.handle(&req);
         Box::pin(async { res })
     }
