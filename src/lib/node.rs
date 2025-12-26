@@ -39,12 +39,21 @@ where
     where
         R: AsyncRead + Unpin + Send + 'static,
     {
+        // Init node state
+        let node_state: Arc<RwLock<NodeState>> = Arc::default();
+
         // read -> process -> output
         let (tx_in, rx_in) = mpsc::channel::<Message>(CHANNEL_BUFFER_SIZE);
         let (tx_out, rx_out) = mpsc::channel::<Result<Message, S::Error>>(CHANNEL_BUFFER_SIZE);
 
         let read_task = tokio::spawn(Self::read(tx_in, reader));
-        let process_task = tokio::spawn(Self::process(rx_in, tx_out, self.service.clone()));
+        let process_task = tokio::spawn(Self::process(
+            rx_in,
+            tx_out,
+            node_state.clone(),
+            self.service.clone(),
+        ));
+
         let write_task = tokio::spawn(Self::write(rx_out, BufWriter::new(io::stdout())));
 
         let (_, _, _) = tokio::join!(read_task, process_task, write_task,);
@@ -65,11 +74,9 @@ where
     async fn process(
         mut rx_in: Receiver<Message>,
         tx_out: Sender<Result<Message, S::Error>>,
+        node_state: Arc<RwLock<NodeState>>,
         service: S,
     ) -> Result<(), anyhow::Error> {
-        // Init node state
-        let node_state: Arc<RwLock<NodeState>> = Arc::default();
-
         while let Some(msg) = rx_in.recv().await {
             let mut service = service.clone();
             let node_state = node_state.clone();
@@ -79,8 +86,7 @@ where
                 let msg_ctx = MessageContext::new(msg, node_state);
                 let res = service.call(msg_ctx).await;
                 tx_out.send(res).await.unwrap();
-            })
-            .await?;
+            });
         }
 
         Ok(())

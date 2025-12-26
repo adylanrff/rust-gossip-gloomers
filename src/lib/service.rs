@@ -1,7 +1,4 @@
-use std::{
-    fmt::Display,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -132,8 +129,9 @@ impl Service<MessageContext> for MaelstromService {
 
     fn call(&mut self, req: MessageContext) -> Self::Future {
         let router = self.router.clone();
+        let msg_id = req.msg.body.msg_id;
+
         Box::pin(async move {
-            let msg_id = req.msg.body.msg_id;
             let res = router.handle(req.msg, req.state).await;
             match res {
                 Ok(response) => {
