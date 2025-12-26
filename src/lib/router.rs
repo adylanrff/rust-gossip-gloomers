@@ -42,8 +42,8 @@ impl Router {
 fn init(r: Message, node_state: Arc<RwLock<NodeState>>) -> Result<Message, MaelstromError> {
     let mut node_state = node_state.write().unwrap();
 
-    node_state.node_id = r.body.node_id.clone();
-    node_state.node_ids = r.body.node_ids.clone();
+    node_state.node_id = serde_json::from_value(r.body.extra["node_id"].clone())?;
+    node_state.node_ids = serde_json::from_value(r.body.extra["node_ids"].clone())?;
 
     let body = crate::MessageBody::new("init_ok".to_string(), 0, r.body.msg_id);
     let msg = Message::new(r.dest.clone(), r.src.clone(), body);

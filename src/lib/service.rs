@@ -18,14 +18,11 @@ use crate::{Router, node::NodeState};
 pub struct MessageBody {
     #[serde(rename = "type")]
     pub msg_type: String,
-
     pub msg_id: u64,
-
     pub in_reply_to: u64,
 
-    // Initializations
-    pub node_id: String,
-    pub node_ids: Vec<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
 }
 
 impl MessageBody {
@@ -34,8 +31,7 @@ impl MessageBody {
             msg_type,
             msg_id,
             in_reply_to,
-            node_id: String::new(),
-            node_ids: vec![],
+            extra: serde_json::Value::default(),
         }
     }
 }
@@ -72,32 +68,43 @@ Reference: https://github.com/jepsen-io/maelstrom/blob/main/doc/protocol.md
 */
 #[derive(Debug, Error, Serialize, Deserialize)]
 pub enum MaelstromError {
+    #[error("timeout")]
     Timeout,
 
+    #[error("node not found")]
     NodeNotFound,
 
+    #[error("not supported")]
     NotSupported,
 
+    #[error("temporarily unavailable")]
     TemporarilyUnavailable,
 
+    #[error("malformed request")]
     MalformedRequest,
 
+    #[error("crash")]
     Crash,
 
+    #[error("Abort")]
     Abort,
 
+    #[error("KeyDoesNotExist")]
     KeyDoesNotExist,
 
+    #[error("KeyAlreadyExist")]
     KeyAlreadyExist,
 
+    #[error("PreconditionFailed")]
     PreconditionFailed,
 
+    #[error("TxnConflict")]
     TxnConflict,
 }
 
-impl Display for MaelstromError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+impl From<serde_json::Error> for MaelstromError {
+    fn from(_: serde_json::Error) -> Self {
+        Self::MalformedRequest
     }
 }
 
@@ -126,8 +133,16 @@ impl Service<MessageContext> for MaelstromService {
     fn call(&mut self, req: MessageContext) -> Self::Future {
         let router = self.router.clone();
         Box::pin(async move {
+            let msg_id = req.msg.body.msg_id;
             let res = router.handle(req.msg, req.state).await;
-            res
+            match res {
+                Ok(response) => {
+                    let mut msg = response.clone();
+                    msg.body.in_reply_to = msg_id;
+                    Ok(msg)
+                }
+                Err(_) => res,
+            }
         })
     }
 }

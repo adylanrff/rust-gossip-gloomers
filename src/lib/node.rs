@@ -18,6 +18,7 @@ const CHANNEL_BUFFER_SIZE: usize = 10;
 pub struct NodeState {
     pub node_id: String,
     pub node_ids: Vec<String>,
+    pub next_msg_id: i64,
 }
 
 pub struct MaelstromNode<S> {
@@ -45,28 +46,10 @@ where
         let read_task = tokio::spawn(Self::read(tx_in, reader));
         let process_task = tokio::spawn(Self::process(rx_in, tx_out, self.service.clone()));
         let write_task = tokio::spawn(Self::write(rx_out, BufWriter::new(io::stdout())));
-        // 1. threads for reading
-        // 2. threads for processing
-        // 3. threads for outputing
 
         let (_, _, _) = tokio::join!(read_task, process_task, write_task,);
     }
 
-    // async fn handle_init(&mut self, r: &Message) {
-    //     // self.state.node_id = r.body.node_id.clone();
-    //     // self.state.node_ids = r.body.node_ids.clone();
-    //     //
-    //     let body = MessageBody::new("init_ok".to_string(), 0, r.body.msg_id);
-    //     let msg = Message::new(r.dest.clone(), r.src.clone(), body);
-    //
-    //     let writer_guard = self.writer.clone();
-    //     let mut writer = writer_guard.lock().await;
-    //
-    //     let json_resp = serde_json::to_string(&msg).unwrap();
-    //     writeln!(writer, "{}", json_resp).unwrap();
-    //     writer.flush().unwrap();
-    // }
-    //
     async fn read<R>(sender: Sender<Message>, reader: BufReader<R>)
     where
         R: AsyncRead + Unpin,
@@ -96,7 +79,8 @@ where
                 let msg_ctx = MessageContext::new(msg, node_state);
                 let res = service.call(msg_ctx).await;
                 tx_out.send(res).await.unwrap();
-            });
+            })
+            .await?;
         }
 
         Ok(())

@@ -22,9 +22,12 @@ async fn main() {
 }
 
 fn echo(r: Message, _: Arc<RwLock<NodeState>>) -> Result<Message, MaelstromError> {
+    let mut msg_body = r.body.clone();
+    msg_body.msg_type = "echo_ok".to_string();
+
     Ok(Message::new(
         r.dest.to_string(),
         r.src.to_string(),
-        r.body.clone(),
+        msg_body,
     ))
 }
