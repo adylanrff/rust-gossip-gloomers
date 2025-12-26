@@ -12,18 +12,24 @@ use tokio::{
 };
 use tower::Service;
 
-use crate::{Message, MessageBody};
+use crate::{Message, MessageBody, MessageContext};
+
+#[derive(Debug, Clone, Default)]
+pub struct NodeState {
+    node_id: String,
+    node_ids: Vec<String>,
+}
 
 pub struct MaelstromNode<S> {
     service: S,
     writer: Arc<Mutex<BufWriter<Stdout>>>,
 
-    node_id: String,
+    state: NodeState,
 }
 
 impl<S> MaelstromNode<S>
 where
-    S: Service<Message> + Clone + Send + 'static,
+    S: Service<MessageContext> + Clone + Send + 'static,
     S::Response: Serialize,
     S::Future: Send + 'static,
     S::Error: Debug,
@@ -32,7 +38,7 @@ where
         Self {
             service: service,
             writer: Arc::new(Mutex::new(BufWriter::new(io::stdout()))),
-            node_id: String::new(),
+            state: NodeState::default(),
         }
     }
 
@@ -44,10 +50,12 @@ where
         loop {
             // Read stdin
             let line = lines.next_line().fuse().await.unwrap().unwrap();
-
             let req: Message = serde_json::from_str(&line).unwrap();
+
             let mut service = self.service.clone();
             let writer_guard = self.writer.clone();
+
+            let msg = MessageContext::new(req.clone(), self.state.clone());
 
             if req.body.msg_type == "init" {
                 self.handle_init(&req).await;
@@ -56,12 +64,9 @@ where
 
             tokio::spawn(async move {
                 let mut writer = writer_guard.lock().await;
+                let res = service.call(msg).await;
 
-                let res = match req.body.msg_type.as_str() {
-                    _ => service.call(req),
-                }
-                .await;
-
+                // Write to stdout
                 match res {
                     Ok(response) => {
                         let json_resp = serde_json::to_string(&response).unwrap();
@@ -79,7 +84,9 @@ where
     }
 
     async fn handle_init(&mut self, r: &Message) {
-        self.node_id = r.body.node_id.clone();
+        self.state.node_id = r.body.node_id.clone();
+        self.state.node_ids = r.body.node_ids.clone();
+
         let body = MessageBody::new("init_ok".to_string(), 0, r.body.msg_id);
         let msg = Message::new(r.dest.clone(), r.src.clone(), body);
 

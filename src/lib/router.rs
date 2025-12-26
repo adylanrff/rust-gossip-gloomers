@@ -3,9 +3,9 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::{MaelstromError, Message, MessageBody, node::MaelstromNode};
+use crate::{MaelstromError, Message, node::NodeState};
 
-type HandlerFun = fn(r: &Message) -> Result<Message, MaelstromError>;
+type HandlerFun = fn(r: &Message, node_state: &NodeState) -> Result<Message, MaelstromError>;
 
 #[derive(Default, Clone)]
 pub struct Router {
@@ -15,7 +15,7 @@ pub struct Router {
 
 impl Router {
     pub fn new() -> Self {
-        Self::default().route("init", init)
+        Self::default()
     }
 
     pub fn route(self, msg_type: &str, f: HandlerFun) -> Self {
@@ -25,16 +25,11 @@ impl Router {
         self
     }
 
-    pub fn handle(&self, r: &Message) -> Result<Message, MaelstromError> {
-        if let Some(handler) = self.map.read().unwrap().get(&r.body.msg_type) {
-            return handler(r);
+    pub fn handle(&self, req: &Message, node_state: &NodeState) -> Result<Message, MaelstromError> {
+        if let Some(handler) = self.map.read().unwrap().get(&req.body.msg_type) {
+            return handler(req, node_state);
         }
 
         return Err(MaelstromError::NotSupported);
     }
-}
-
-fn init(r: &Message) -> Result<Message, MaelstromError> {
-    let body = MessageBody::new("init_ok".to_string(), 0, r.body.msg_id);
-    Ok(Message::new(r.dest.clone(), r.src.clone(), body))
 }

@@ -8,7 +8,7 @@ use std::task::Poll;
 use futures::future::BoxFuture;
 use tower::Service;
 
-use crate::Router;
+use crate::{Router, node::NodeState};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
@@ -48,6 +48,18 @@ pub struct Message {
 impl Message {
     pub fn new(src: String, dest: String, body: MessageBody) -> Self {
         Self { src, dest, body }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MessageContext {
+    msg: Message,
+    state: NodeState,
+}
+
+impl MessageContext {
+    pub fn new(msg: Message, state: NodeState) -> Self {
+        Self { msg, state }
     }
 }
 
@@ -97,7 +109,7 @@ impl MaelstromService {
     }
 }
 
-impl Service<Message> for MaelstromService {
+impl Service<MessageContext> for MaelstromService {
     type Response = Message;
 
     type Error = MaelstromError;
@@ -108,8 +120,8 @@ impl Service<Message> for MaelstromService {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: Message) -> Self::Future {
-        let res = self.router.handle(&req);
+    fn call(&mut self, req: MessageContext) -> Self::Future {
+        let res = self.router.handle(&req.msg, &req.state);
         Box::pin(async { res })
     }
 }

@@ -1,4 +1,8 @@
-use maelstrom::{self, MaelstromError, Message, middleware::log::LogLayer, node::MaelstromNode};
+use maelstrom::{
+    self, MaelstromError, Message,
+    middleware::log::LogLayer,
+    node::{MaelstromNode, NodeState},
+};
 use tokio::io::{BufReader, stdin};
 use tower::ServiceBuilder;
 
@@ -15,7 +19,7 @@ async fn main() {
     transport.run(reader).await;
 }
 
-fn echo(r: &Message) -> Result<Message, MaelstromError> {
+fn echo(r: &Message, _: &NodeState) -> Result<Message, MaelstromError> {
     Ok(Message::new(
         "a".to_string(),
         "b".to_string(),
