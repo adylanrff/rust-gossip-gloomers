@@ -1,3 +1,5 @@
+use std::sync::{Arc, RwLock};
+
 use maelstrom::{
     self, MaelstromError, Message,
     middleware::log::LogLayer,
@@ -19,10 +21,10 @@ async fn main() {
     transport.run(reader).await;
 }
 
-fn echo(r: &Message, _: &NodeState) -> Result<Message, MaelstromError> {
+fn echo(r: Message, _: Arc<RwLock<NodeState>>) -> Result<Message, MaelstromError> {
     Ok(Message::new(
-        "a".to_string(),
-        "b".to_string(),
+        r.dest.to_string(),
+        r.src.to_string(),
         r.body.clone(),
     ))
 }

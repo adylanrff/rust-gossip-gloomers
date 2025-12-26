@@ -1,4 +1,7 @@
-use std::fmt::Display;
+use std::{
+    fmt::Display,
+    sync::{Arc, RwLock},
+};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -54,11 +57,11 @@ impl Message {
 #[derive(Debug, Clone)]
 pub struct MessageContext {
     msg: Message,
-    state: NodeState,
+    state: Arc<RwLock<NodeState>>,
 }
 
 impl MessageContext {
-    pub fn new(msg: Message, state: NodeState) -> Self {
+    pub fn new(msg: Message, state: Arc<RwLock<NodeState>>) -> Self {
         Self { msg, state }
     }
 }
@@ -114,14 +117,17 @@ impl Service<MessageContext> for MaelstromService {
 
     type Error = MaelstromError;
 
-    type Future = BoxFuture<'static, Result<Message, MaelstromError>>;
+    type Future = BoxFuture<'static, Result<Self::Response, MaelstromError>>;
 
     fn poll_ready(&mut self, _: &mut std::task::Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, req: MessageContext) -> Self::Future {
-        let res = self.router.handle(&req.msg, &req.state);
-        Box::pin(async { res })
+        let router = self.router.clone();
+        Box::pin(async move {
+            let res = router.handle(req.msg, req.state).await;
+            res
+        })
     }
 }
